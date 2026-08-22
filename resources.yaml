@@ -1,0 +1,135 @@
+# Sources to scan. Config-driven — the agent reads this file, code doesn't change.
+#
+# Fields of each resource:
+#   name      — human-readable name
+#   url       — entry point for the scan
+#   category  — job | vc_board | bounty | contest | grant | hackathon
+#   render    — static (HTML directly) | js (render JS / headless) | getro (Getro JSON API)
+#               | consider (Getro's newer "Consider" platform search-jobs JSON API — no browser, no LLM)
+#               | greenhouse | lever | ashby | workable (direct-company ATS JSON API — no browser, no LLM)
+#               | a16z (a16z crypto portfolio jobs — inlined JSON, no browser, no LLM)
+#               | remoteok (RemoteOK tag-scoped JSON API — no browser, no LLM)
+#               | jobstash (JobStash middleware JSON API — no browser, no LLM) | api
+#   enabled   — whether to scan (can be disabled temporarily without deleting)
+#   notes     — hints for fetcher/matcher
+#
+# render: many VC boards (jobs.<vc>.xyz) are Getro/Consider networks with JS rendering;
+# marked js. First we try WebFetch/HTTP; where it returns nothing — a headless browser.
+
+meta:
+  # How many days to remember already-shown positions (dedup across runs)
+  dedup_retention_days: 30
+  # How many top positions to send in the digest per scan
+  digest_top_n: 15
+  # Freshness window: how many days back to include jobs.
+  # default — for the scheduled scan and when the user gives none; max — a hard ceiling.
+  default_window_days: 1
+  max_window_days: 7
+  # Runaway safety ceiling on positions sent to the expensive scorer (sonnet),
+  # AFTER the cheap haiku prefilter. Normally never trips — the prefilter already
+  # culls off-field roles, and everything it keeps IS scored (in batches). Set
+  # high on purpose so "score them all" holds; the overflow (if ever) is
+  # reported, not silently dropped. Tune live with /set cap.
+  matcher_input_cap: 500
+
+resources:
+  # ── Crypto/web3 job boards ─────────────────────────────────────────────
+  - { name: "Crypto Careers",        url: "https://www.crypto-careers.com/jobs/search?q=&sort=created_at", category: job, render: js, enabled: true, notes: "Cloudflare-protected (403 over plain HTTP). Point at /jobs/search (newest-first): the homepage hydrates the job list unreliably in headless; the search page renders 20 real /jobs/<id> cards stably. Verified live 2026-08-01: 20 records, 4/4 runs." }
+  - { name: "Web3 Career",           url: "https://web3.career",                    category: job, render: static, enabled: true }
+  - { name: "Cryptocurrency Jobs",   url: "https://cryptocurrencyjobs.co",          category: job, render: static, enabled: true }
+  - { name: "Crypto Jobs List",      url: "https://cryptojobslist.com",             category: job, render: js, enabled: true, notes: "render js (not static): plain HTTP is 403'd at the Cloudflare edge; headless browser passes. Verified 2026-08-04: 25 records." }
+  - { name: "Crypto Jobs",           url: "https://www.cryptojobs.com",             category: job, render: static, enabled: true }
+  - { name: "Find Web3",             url: "https://findweb3.com/jobs",              category: job, render: js,     enabled: true }
+  - { name: "Sail Onchain",          url: "https://sailonchain.com",                category: job, render: js,     enabled: true }
+  - { name: "Remote3",               url: "https://remote3.co",                     category: job, render: static, enabled: true }
+  - { name: "BeInCrypto Jobs",       url: "https://beincrypto.com/jobs/",           category: job, render: js,     enabled: true, notes: "Cloudflare-protected (403 over plain HTTP); headless render passes the challenge" }
+  - { name: "Web3 Vacancy",          url: "https://web3vacancy.com",                category: job, render: static, enabled: true, notes: "added 2026-08-09: verified live, 54 positions — clean title/company/salary/date lines, no nav junk" }
+  - { name: "crypto.jobs",           url: "https://crypto.jobs",                    category: job, render: static, enabled: true, notes: "added 2026-08-09: verified live, 10 positions — clean listing, but dates run 41-139 days old (board isn't strictly newest-first); freshness left to the matcher" }
+  - { name: "JobStash",              url: "https://jobstash.xyz",                   category: job, render: jobstash, enabled: true, notes: "added 2026-08-09: static/js renders caught mostly filter/facet chrome (see prior note); switched to the public middleware.jobstash.xyz JSON API, parsed via parse_jobstash, no browser/LLM needed. Verified live: days=7 -> 52 postings (board total 5908, broad multi-discipline aggregator)." }
+
+  # ── VC / ecosystem job boards (mostly Getro, JS) ───────────────────────
+  - { name: "a16z crypto",           url: "https://a16zcrypto.com/jobs/",           category: vc_board, render: a16z, enabled: true, notes: "not Getro — the jobs page inlines a portfolioJobs JSON array (~50 portfolio cos) directly in the static HTML; parsed via parse_a16z, no browser/LLM needed" }
+  - { name: "Paradigm",              url: "https://jobs.paradigm.xyz",              category: vc_board, render: js, enabled: false, notes: "DISABLED 2026-08-01: JS blob (~22k chars) that never parses into job cards — only produced a noisy 'truncated' footer, 0 usable postings. Re-enable only if a structured (getro/api) endpoint is found." }
+  - { name: "Electric Capital",      url: "https://jobs.electriccapital.com/jobs",  category: vc_board, render: getro, enabled: true }
+  - { name: "Blockchain Capital",    url: "https://jobs.blockchaincapital.com/jobs",category: vc_board, render: getro, enabled: true }
+  - { name: "Dragonfly",             url: "https://jobs.dragonfly.xyz/jobs",        category: vc_board, render: getro, enabled: true }
+  - { name: "Block (block.xyz)",     url: "https://block.xyz/careers/jobs",         category: vc_board, render: js, enabled: true, notes: "whole domain (incl. boards.greenhouse.io/block) 403s at the shared Fastly edge from this dev IP, before reaching the origin — same edge error also hits unrelated Fastly sites, so it's an IP-reputation/WAF block, not a code fix. Static/JS/headers all fail equally. Recheck from the VPS egress IP; leave enabled for now, degrades gracefully to an empty result" }
+  - { name: "Solana Jobs",           url: "https://jobs.solana.com/jobs",           category: vc_board, render: getro, enabled: true }
+  - { name: "Avalanche Jobs",        url: "https://jobs.avax.network/jobs",         category: vc_board, render: getro, enabled: true }
+  - { name: "Ethereum Job Board",    url: "https://ethereumjobboard.com/jobs",      category: vc_board, render: js, enabled: true }
+  - { name: "Midnight Careers",      url: "https://apply.workable.com/io-global",   category: vc_board, render: workable, enabled: true, notes: "the careers page's headless render only captured a cookie-consent banner (jobs never loaded, JS widget); the page's own 'email my resume' fallback points at jobs.workablemail.com, and the Workable account behind it is io-global (IO Global, Midnight's parent) — switched to the public Workable widget JSON API, parsed via parse_ats(family=workable), no browser/LLM needed" }
+  - { name: "Variant",               url: "https://variant.getro.com/jobs",         category: vc_board, render: getro, enabled: true, notes: "added 2026-08-09: verified live, classic Getro (__NEXT_DATA__ network.id=1508) — 91 positions unwindowed, 15 within a 7-day window" }
+  - { name: "Polychain",             url: "https://jobs.polychain.capital",         category: vc_board, render: getro, enabled: true, notes: "added 2026-08-09: verified live, classic Getro (network.id=203) — 120 positions unwindowed (hits the _GETRO_MAX_JOBS cap, board is larger), 7 within a 7-day window" }
+  - { name: "Pantera",               url: "https://jobs.panteracapital.com",        category: vc_board, render: consider, enabled: true, notes: "added 2026-08-09: NOT the classic Getro __NEXT_DATA__ board Variant/Polychain use — it's the newer 'Consider' platform (window.serverInitialData.fixedBoard='pantera-capital', virtualized job list, no numeric network.id). Dedicated parser (parse_consider) hits the board's own POST /api-boards/search-jobs JSON API directly, no browser/LLM needed. Verified live: days=7 -> 64 postings (board total 977)." }
+
+  # ── Bug bounty ─────────────────────────────────────────────────────────
+  - { name: "Immunefi",              url: "https://immunefi.com/bug-bounty/",       category: bounty, render: js,     enabled: true, notes: "filter by max reward and tech stack" }
+  - { name: "HackenProof",           url: "https://hackenproof.com",                category: bounty, render: js,     enabled: true, notes: "serves a Cloudflare Turnstile challenge page even to a headless browser with a real UA — not a code fix (solving Turnstile programmatically is out of scope). Degrades gracefully to a near-empty/challenge-page result; found during the 2026-07-18 fetch audit, left for the owner" }
+
+  # ── Audit contests / competitions ─────────────────────────────────────
+  - { name: "Sherlock Contests",     url: "https://audits.sherlock.xyz/contests",   category: contest, render: js,    enabled: true, notes: "deadlines, prize pool" }
+  - { name: "Cantina Competitions",  url: "https://cantina.xyz/solutions/competitions", category: contest, render: js, enabled: true }
+
+  # ── Bounty/earn/quest platforms ──────────────────────────────────────
+  - { name: "Superteam Earn",        url: "https://earn.superteam.fun/all/?tab=bounties", category: bounty, render: js, enabled: true }
+  - { name: "Scribble DAO",          url: "https://scribble.network",               category: bounty, render: js,     enabled: true }
+  - { name: "Wizz HQ",               url: "https://wizzhq.xyz",                     category: bounty, render: js,     enabled: true }
+  - { name: "First Dollar",          url: "https://app.firstdollar.money",          category: bounty, render: js,     enabled: true }
+  - { name: "Rova",                  url: "https://rova.xyz",                       category: bounty, render: js,     enabled: true }
+
+  # ── Grants / hackathons ──────────────────────────────────────────────
+  - { name: "DoraHacks",             url: "https://dorahacks.io/hackathon",         category: hackathon, render: js,  enabled: true }
+  - { name: "ETHGlobal",             url: "https://ethglobal.com",                  category: hackathon, render: js,  enabled: true }
+  - { name: "Gitcoin",               url: "https://gitcoin.co",                     category: grant, render: js,      enabled: true }
+
+  # ── Added by the assistant (verify/disable as needed) ────────────────
+  # Audit contests missing from the list — the main ones in the security niche:
+  - { name: "Code4rena",             url: "https://code4rena.com/audits",           category: contest, render: js,    enabled: true, notes: "added: leading audit contests" }
+  - { name: "CodeHawks (Cyfrin)",    url: "https://codehawks.cyfrin.io/contests",   category: contest, render: js,    enabled: true, notes: "added: audit contests" }
+  # Ukrainian IT boards filtered to blockchain/crypto:
+  - { name: "Djinni",                url: "https://djinni.co/jobs/?all_keywords=blockchain", category: job, render: static, enabled: true, notes: "UA board; all_keywords= is the working filter (primary_keyword has no blockchain category → unfiltered promo feed)" }
+  - { name: "DOU Jobs",              url: "https://jobs.dou.ua/vacancies/?category=Blockchain",  category: job, render: static, enabled: true, notes: "added: UA, Blockchain category" }
+  # General remote boards with a crypto tag:
+  - { name: "RemoteOK (crypto)",     url: "https://remoteok.com/remote-crypto-jobs", category: job, render: remoteok, enabled: true, notes: "static fetch returned only nav chrome (no listing, JS-loaded); switched to the public tag-scoped JSON API (remoteok.com/api?tags=crypto), parsed via parse_remoteok, no browser/LLM needed" }
+  - { name: "Wellfound (crypto)",    url: "https://wellfound.com/role/r/blockchain-developer", category: job, render: js, enabled: false, notes: "added: requires login, disabled by default" }
+
+  # ── Direct-company ATS boards (public JSON API — 0 browser, 0 LLM) ────────
+  # Add a specific web3 company's career board here instead of a JS aggregator.
+  # url = the standard board URL; the token (first path segment) is read from it.
+  #   greenhouse → https://boards.greenhouse.io/<token>
+  #   lever      → https://jobs.lever.co/<token>
+  #   ashby      → https://jobs.ashbyhq.com/<token>
+  # All entries below were probed live against the ATS's public JSON API
+  # (2026-07-19) and confirmed to return real postings before being added.
+  - { name: "Coinbase (GH)",          url: "https://boards.greenhouse.io/coinbase",   category: job, render: greenhouse, enabled: true, notes: "verified live: 151 jobs" }
+  - { name: "Ripple (GH)",            url: "https://boards.greenhouse.io/ripple",     category: job, render: greenhouse, enabled: true, notes: "verified live: 140 jobs" }
+  - { name: "Fireblocks (GH)",        url: "https://boards.greenhouse.io/fireblocks", category: job, render: greenhouse, enabled: true, notes: "verified live: 61 jobs" }
+  - { name: "Gemini (GH)",            url: "https://boards.greenhouse.io/gemini",     category: job, render: greenhouse, enabled: true, notes: "verified live: 35 jobs" }
+  - { name: "Consensys (GH)",         url: "https://boards.greenhouse.io/consensys",  category: job, render: greenhouse, enabled: true, notes: "verified live: 3 jobs (incl. MetaMask eng roles) — small board, kept for role relevance" }
+  - { name: "Anchorage Digital (Lever)", url: "https://jobs.lever.co/anchorage",      category: job, render: lever,      enabled: true, notes: "verified live: 45 jobs" }
+  - { name: "Circle (Ashby)",         url: "https://jobs.ashbyhq.com/circle",         category: job, render: ashby,      enabled: false, notes: "DISABLED 2026-07-20: board 404s (moved off this Ashby token). Find the new board URL to re-enable." }
+  - { name: "Alchemy (Ashby)",        url: "https://jobs.ashbyhq.com/alchemy",        category: job, render: ashby,      enabled: true, notes: "verified live: 17 jobs" }
+  - { name: "Uniswap Labs (Ashby)",   url: "https://jobs.ashbyhq.com/uniswap",        category: job, render: ashby,      enabled: true, notes: "verified live: 10 jobs — token is 'uniswap', not 'uniswaplabs' (that Greenhouse guess 404s)" }
+  - { name: "Ledger (Ashby)",         url: "https://jobs.ashbyhq.com/ledger",         category: job, render: ashby,      enabled: true, notes: "verified live: 10 jobs" }
+  - { name: "Blockdaemon (Ashby)",    url: "https://jobs.ashbyhq.com/blockdaemon",    category: job, render: ashby,      enabled: true, notes: "verified live: 5 jobs" }
+  - { name: "Phantom (Ashby)",        url: "https://jobs.ashbyhq.com/phantom",        category: job, render: ashby,      enabled: true, notes: "verified live: 14 jobs" }
+  - { name: "OpenSea (Ashby)",        url: "https://jobs.ashbyhq.com/opensea",        category: job, render: ashby,      enabled: true, notes: "verified live: 1 job — thin board right now, kept since it's real and may fill up" }
+  - { name: "Magic Eden (Ashby)",     url: "https://jobs.ashbyhq.com/magiceden",      category: job, render: ashby,      enabled: true, notes: "verified live: 1 job — thin board right now, kept since it's real and may fill up" }
+  - { name: "Jito Labs (Lever)",      url: "https://jobs.lever.co/jito.wtf",          category: job, render: lever,      enabled: true, notes: "added 2026-08-09: verified live, 4 jobs — token is the domain 'jito.wtf'" }
+  - { name: "CoW DAO (Ashby)",        url: "https://jobs.ashbyhq.com/cow-dao",        category: job, render: ashby,      enabled: true, notes: "added 2026-08-09: verified live, 2 jobs (incl. Staff Backend Engineer, Rust) — thin board, kept for role relevance; token found via cow.fi/careers Apply links, not a guessable name" }
+  # Probed and REJECTED (no working Greenhouse/Lever/Ashby/Workable token found,
+  # or token found but 0 live jobs — likely on a different ATS, e.g. Workday/
+  # SmartRecruiters/custom, or not currently hiring):
+  #   Kraken, Chainalysis, dYdX, Chainlink Labs, Wintermute, Amberdata — 404 on
+  #     every family across several plausible token guesses.
+  #   Talos — a Workable account exists (org name resolves) but returns 0 jobs.
+  #   Figment — Greenhouse board resolves but has a single non-eng posting
+  #     (Senior Accountant); left out for role relevance, not a broken board.
+  #   Flashbots (jobs.ashbyhq.com/flashbots.net) — 2026-08-09: token resolves
+  #     (HTTP 200, API and JS render agree) but 0 open postings right now —
+  #     genuinely not hiring via this board at the moment, not a broken token.
+  #   bloXroute Labs (jobs.lever.co/blox-route, found via bloxroute.com/careers/
+  #     embed script) — 2026-08-09: token resolves (HTTP 200) but the API
+  #     returns an empty list and the board page has no listing content (only
+  #     boilerplate CSS mentioning the "posting-title" class) — 0 open roles
+  #     right now, not a broken token.

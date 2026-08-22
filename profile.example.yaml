@@ -1,0 +1,86 @@
+# Example seed profile — the template a fresh checkout searches by.
+#
+# Every value below is a PLACEHOLDER. Replace it with your own: copy this file
+# to `profile.yaml` (gitignored) and edit it, or point the tool at your CV
+# (`python -m src onboard cv.pdf`), which writes `data/profile.active.yaml`
+# and wins over both.
+#
+# Resolution order (config.profile_base_path):
+#   data/profile.active.yaml  →  profile.yaml  →  profile.example.yaml
+#
+# The example is a plain backend engineer on purpose: nothing in the pipeline is
+# field-specific — the source query terms, the prefilter gate and the scorer are
+# all derived from this file. Note that the bundled `resources.yaml` is a web3
+# board catalog, so to search a different field, swap the boards too
+# (`sources --add`, or edit resources.yaml).
+#
+# The active profile is re-read and inlined into the matching prompt on every
+# run (each LLM call is an isolated session — nothing is cached across calls),
+# so keep it compact: every line here is re-sent with each scan.
+
+# Which resource categories to scan, from resources.yaml:
+# job | vc_board | bounty | contest | grant | hackathon
+focus_categories: [job]
+
+identity:
+  name: "Your Name"
+  role: "Backend Engineer (Python, distributed systems)"   # your one-line target role
+  seniority: "mid to senior"   # free text; the matcher reads it as a range
+  years_experience: 4
+
+skills:
+  # Order matters: the first ~10 entries double as source-side search terms
+  # (sources/common._profile_query_terms), so keep them short and searchable.
+  # `must_have` is what gets FILTERED and SCORED on — your real strengths, not
+  # every keyword on your CV.
+  must_have:
+    - Python
+    - PostgreSQL
+    - REST APIs
+    - Docker
+    - CI/CD
+    - AWS
+  nice_to_have:          # bonus, never required
+    - Go
+    - Kubernetes
+    - Kafka
+    - Redis
+    - Terraform
+    - gRPC
+  languages_spoken: [en]
+
+preferences:
+  work_format: [remote, hybrid, onsite]   # first entry = preferred
+  locations: []                           # [] = open worldwide
+  relocation_ok: true
+  employment: [full-time, contract]
+  min_salary_usd: null        # hard floor; null = no floor
+  salary_target_usd: null     # ballpark target, e.g. 90000; null = unstated
+  timezones_ok: []            # e.g. ["UTC+0..UTC+3"]; [] = any
+  # Free-text eligibility policy — YOUR work authorisation / visa / EOR-B2B
+  # situation, applied by the matcher as a firm gate (matching-rules.md §1a).
+  # Empty = no eligibility exclusion at all. Example:
+  #   "Remote EU/EMEA or worldwide. Contractor/B2B or EOR acceptable. Skip
+  #    roles that require work authorisation I do not hold (e.g. US-only)."
+  location_policy: ""
+
+# Roles you are actively hunting right now — a preference, not a requirement
+# (matching-rules.md §2a: top-of-band Role/level scoring, up to +8).
+# [] = score every role on skills alone. Example:
+#   - Platform engineer
+#   - Backend engineer (data-intensive services)
+priority_roles: []
+
+# Stop factors — applied in Python, before any model sees the posting
+exclude:
+  keywords: ["intern", "internship", "unpaid", "community manager", "moderator"]
+  seniority_below: "junior"
+
+summary: |
+  One short paragraph in your own words: what you build, the stack you build it
+  with, and the kind of role you want. The matcher reads this alongside the
+  fields above, so put here whatever the lists do not capture. Example:
+  "Backend engineer with production experience on Python services — APIs, data
+  pipelines, and the infrastructure around them. Stack: Python, PostgreSQL,
+  Docker, AWS. Looking for mid-to-senior backend or platform roles, remote
+  preferred."
