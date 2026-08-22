@@ -1,0 +1,37 @@
+# ── Secrets and personal data ─────────────────────────────────────────────
+.env
+
+# Your own profile: name, salary expectations, career history.
+# The repo ships profile.example.yaml as the template instead.
+profile.yaml
+
+# Runtime state: dedup store, CSV exports, and the profile built from your CV
+data/
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# ── Editors / OS ──────────────────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ── Local assistant config (not part of the tool) ─────────────────────────
+# The prompts the app loads at runtime — .claude/agents/{fetcher,prefilter,
+# matcher}.md, .claude/rules/, .claude/skills/{parse-vacancy,format-digest,
+# resume-to-profile} — ARE tracked. Only the coding-assistant's own setup is not.
+CLAUDE.md
+.mcp.json
+.claude/settings.local.json
+.claude/agents/developer.md
+.claude/agents/tester.md
+.claude/skills/write-python/
+
+# ── Scratch ───────────────────────────────────────────────────────────────
+_analysis/

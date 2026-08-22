@@ -1,0 +1,2 @@
+# Dev-only deps (tests). Keep out of the runtime requirements.txt.
+pytest>=8.0

@@ -1,0 +1,21 @@
+# Job Searcher — dependencies
+
+# Agent on the Claude Code subscription (or an API key — see .env.example)
+claude-agent-sdk>=0.1.0
+
+# Network / parsing
+httpx>=0.27
+selectolax>=0.3.21        # fast HTML parser (lighter alternative to lxml)
+trafilatura>=1.9          # main-text extraction from a page (for static sources)
+
+# JS-site rendering (Getro/Consider VC boards, etc.). Optional:
+#   pip install playwright && playwright install chromium
+# If not installed, fetch_source degrades to httpx.
+playwright>=1.44
+
+# Config
+pyyaml>=6.0
+python-dotenv>=1.0
+
+# Résumé onboarding (`python -m src onboard`): extract text from a PDF
+pypdf>=4.0

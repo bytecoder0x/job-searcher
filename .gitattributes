@@ -1,0 +1,3 @@
+# Keep the repository LF-only: the project is developed on Windows, and without
+# this a checkout with core.autocrlf=true commits CRLF noise on every file.
+* text=auto eol=lf
