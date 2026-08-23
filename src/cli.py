@@ -20,17 +20,23 @@ def note(text: str) -> None:
     print(text, file=sys.stderr, flush=True)
 
 
+# Where the shutdown noise comes from: asyncio finalizes the transports of the
+# SDK's child processes after the event loop is already gone, and the garbage
+# collector reports whatever that raises. Seen in the wild as ValueError("I/O
+# operation on closed pipe") and RuntimeError("Event loop is closed") — same
+# cause, different message, so the filter keys on the finalizer, not the text.
+_SHUTDOWN_FINALIZER = "BaseSubprocessTransport.__del__"
+
+
 def quiet_shutdown_noise() -> None:
-    """The SDK spawns a CLI child per LLM call; on Windows their transports are
-    finalized after the event loop is gone, so asyncio prints an 'I/O operation
-    on closed pipe' traceback once the command already succeeded. Cosmetic and
-    not fixable from here — swallow that one, pass everything else through."""
+    """Hide the traceback asyncio prints from that finalizer once the command
+    has already succeeded. Anything raised anywhere else still surfaces."""
     fallback = sys.unraisablehook
 
     def hook(unraisable) -> None:
-        exc = unraisable.exc_value
+        source = getattr(unraisable.object, "__qualname__", "") or ""
 
-        if isinstance(exc, ValueError) and "closed pipe" in str(exc):
+        if _SHUTDOWN_FINALIZER in source:
             return
 
         fallback(unraisable)

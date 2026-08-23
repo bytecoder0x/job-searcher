@@ -2,29 +2,47 @@
 from __future__ import annotations
 
 import sys
+from asyncio.base_subprocess import BaseSubprocessTransport
 
 from src import cli
 
 
-def test_shutdown_noise_hook_swallows_only_the_closed_pipe_error(monkeypatch):
-    """Windows finalizes the SDK's subprocess transports after the loop is gone;
-    that one traceback is noise. A real unraisable must still surface."""
+# The real finalizer the noise comes from — using it, rather than a stand-in,
+# is what makes this test fail if asyncio ever renames or moves it.
+_FINALIZER = BaseSubprocessTransport.__del__
+
+
+class _Unraisable:
+    def __init__(self, exc, obj=None):
+        self.exc_value = exc
+        self.object = obj
+
+
+def test_shutdown_noise_from_the_transport_finalizer_is_hidden(monkeypatch):
+    """Both messages seen in the wild come from the same finalizer after a
+    command already succeeded, so the filter keys on the source, not the text."""
     seen = []
     monkeypatch.setattr(sys, "unraisablehook", seen.append)
     cli.quiet_shutdown_noise()
 
-    class _Unraisable:
-        def __init__(self, exc):
-            self.exc_value = exc
-
-    sys.unraisablehook(_Unraisable(ValueError("I/O operation on closed pipe")))
+    sys.unraisablehook(_Unraisable(ValueError("I/O operation on closed pipe"), _FINALIZER))
+    sys.unraisablehook(_Unraisable(RuntimeError("Event loop is closed"), _FINALIZER))
 
     assert seen == []
 
-    real = _Unraisable(ValueError("a real bug worth seeing"))
-    sys.unraisablehook(real)
 
-    assert seen == [real]
+def test_a_real_unraisable_still_surfaces(monkeypatch):
+    """Same exception types from anywhere else must not be swallowed."""
+    seen = []
+    monkeypatch.setattr(sys, "unraisablehook", seen.append)
+    cli.quiet_shutdown_noise()
+
+    bug = _Unraisable(RuntimeError("Event loop is closed"), object())
+    elsewhere = _Unraisable(ValueError("a real bug worth seeing"))
+    sys.unraisablehook(bug)
+    sys.unraisablehook(elsewhere)
+
+    assert seen == [bug, elsewhere]
 
 
 def test_note_writes_to_stderr_only(capsys):
