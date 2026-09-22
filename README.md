@@ -167,3 +167,5 @@ Tests that hit the real network are marked `network` and deselected by default
 - Positions are remembered in `data/seen.db` and never scored twice, so a second
   scan on the same day is cheap and mostly empty. That is intended.
 - Everything the tool collects stays in `data/`, next to the code.
+- To rescan from scratch, delete `data/seen.db`; the next scan starts with an
+  empty history.
